@@ -2,10 +2,12 @@ USE sa_auth;
 
 CREATE TABLE IF NOT EXISTS session (
   id CHAR(36) NOT NULL,
+  session_token CHAR(36) NOT NULL,
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY idx_session_token (session_token),
   KEY idx_session_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
