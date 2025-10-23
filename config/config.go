@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/milanbella/sa-auth/logger"
 )
 
 const (
@@ -38,7 +40,7 @@ type DBConfig struct {
 func Load() (*Config, error) {
 	dbCfg, err := loadDBConfigFromEnv()
 	if err != nil {
-		return nil, err
+		return nil, logger.LogErr(err)
 	}
 
 	return &Config{
@@ -49,47 +51,47 @@ func Load() (*Config, error) {
 func loadDBConfigFromEnv() (*DBConfig, error) {
 	port, err := getEnvAsInt("DB_PORT", defaultDBPort)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DB_PORT: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("invalid DB_PORT: %w", err))
 	}
 
 	maxOpenConns, err := getEnvAsInt("DB_MAX_OPEN_CONNS", defaultDBMaxOpenConns)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DB_MAX_OPEN_CONNS: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("invalid DB_MAX_OPEN_CONNS: %w", err))
 	}
 
 	maxIdleConns, err := getEnvAsInt("DB_MAX_IDLE_CONNS", defaultDBMaxIdleConns)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DB_MAX_IDLE_CONNS: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("invalid DB_MAX_IDLE_CONNS: %w", err))
 	}
 
 	connMaxLifetime, err := getEnvAsDuration("DB_CONN_MAX_LIFETIME", defaultDBConnMaxLifetime)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DB_CONN_MAX_LIFETIME: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("invalid DB_CONN_MAX_LIFETIME: %w", err))
 	}
 
 	pingTimeout, err := getEnvAsDuration("DB_PING_TIMEOUT", defaultDBPingTimeout)
 	if err != nil {
-		return nil, fmt.Errorf("invalid DB_PING_TIMEOUT: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("invalid DB_PING_TIMEOUT: %w", err))
 	}
 
 	if port <= 0 || port > 65535 {
-		return nil, fmt.Errorf("DB_PORT must be between 1 and 65535")
+		return nil, logger.LogErr(fmt.Errorf("DB_PORT must be between 1 and 65535"))
 	}
 
 	if maxOpenConns <= 0 {
-		return nil, fmt.Errorf("DB_MAX_OPEN_CONNS must be greater than zero")
+		return nil, logger.LogErr(fmt.Errorf("DB_MAX_OPEN_CONNS must be greater than zero"))
 	}
 
 	if maxIdleConns < 0 {
-		return nil, fmt.Errorf("DB_MAX_IDLE_CONNS must be zero or a positive integer")
+		return nil, logger.LogErr(fmt.Errorf("DB_MAX_IDLE_CONNS must be zero or a positive integer"))
 	}
 
 	if connMaxLifetime < 0 {
-		return nil, fmt.Errorf("DB_CONN_MAX_LIFETIME must be zero or a positive duration")
+		return nil, logger.LogErr(fmt.Errorf("DB_CONN_MAX_LIFETIME must be zero or a positive duration"))
 	}
 
 	if pingTimeout <= 0 {
-		return nil, fmt.Errorf("DB_PING_TIMEOUT must be greater than zero")
+		return nil, logger.LogErr(fmt.Errorf("DB_PING_TIMEOUT must be greater than zero"))
 	}
 
 	return &DBConfig{
@@ -120,7 +122,7 @@ func getEnvAsInt(key string, defaultValue int) (int, error) {
 
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
-		return 0, err
+		return 0, logger.LogErr(err)
 	}
 
 	return value, nil
@@ -134,7 +136,7 @@ func getEnvAsDuration(key string, defaultValue time.Duration) (time.Duration, er
 
 	value, err := time.ParseDuration(valueStr)
 	if err != nil {
-		return 0, err
+		return 0, logger.LogErr(err)
 	}
 
 	return value, nil

@@ -8,6 +8,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"github.com/milanbella/sa-auth/config"
+	"github.com/milanbella/sa-auth/logger"
 )
 
 func New(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
@@ -15,7 +16,7 @@ func New(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open mysql connection: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("open mysql connection: %w", err))
 	}
 
 	if cfg.MaxOpenConns > 0 {
@@ -35,7 +36,7 @@ func New(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("ping mysql: %w", err)
+		return nil, logger.LogErr(fmt.Errorf("ping mysql: %w", err))
 	}
 
 	return db, nil

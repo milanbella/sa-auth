@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/milanbella/sa-auth/auth"
+	"github.com/milanbella/sa-auth/logger"
 )
 
 func main() {
@@ -12,7 +14,7 @@ func main() {
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {
-		log.Fatalf("http server failed: %v", err)
+		logger.Fatal(fmt.Errorf("http server failed: %w", err))
 	}
 }
 
