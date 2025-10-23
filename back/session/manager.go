@@ -14,11 +14,17 @@ type ctxKey string
 
 const (
 	cookieName               = "sa_session"
-	sessionContextKey ctxKey = "session-token"
+	sessionContextKey ctxKey = "session-info"
 
 	rotationInterval = 15 * time.Minute
 	sessionTTL       = 24 * time.Hour
 )
+
+// Info holds the session identifier and current token.
+type Info struct {
+	ID    string
+	Token string
+}
 
 // Manager ensures every request has a valid session cookie and keeps the session fresh.
 type Manager struct {
@@ -34,7 +40,7 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		token, cookieToSet, err := m.ensureSession(ctx, r.Cookie)
+		info, cookieToSet, err := m.ensureSession(ctx, r.Cookie)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -44,17 +50,17 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 			http.SetCookie(w, cookieToSet)
 		}
 
-		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionContextKey, token)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(ctx, sessionContextKey, info)))
 	})
 }
 
-func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) (*http.Cookie, error)) (string, *http.Cookie, error) {
+func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) (*http.Cookie, error)) (Info, *http.Cookie, error) {
 	cookie, err := cookieFn(cookieName)
 	if err != nil {
 		if errors.Is(err, http.ErrNoCookie) {
 			return m.createSession(ctx)
 		}
-		return "", nil, err
+		return Info{}, nil, err
 	}
 
 	if cookie.Value == "" {
@@ -77,7 +83,7 @@ func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) 
 		if errors.Is(err, sql.ErrNoRows) {
 			return m.createSession(ctx)
 		}
-		return "", nil, err
+		return Info{}, nil, err
 	}
 
 	now := time.Now().UTC()
@@ -89,48 +95,48 @@ func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) 
 		return m.rotateSession(ctx, id)
 	}
 
-	return sessionToken, nil, nil
+	return Info{ID: id, Token: sessionToken}, nil, nil
 }
 
-func (m *Manager) createSession(ctx context.Context) (string, *http.Cookie, error) {
+func (m *Manager) createSession(ctx context.Context) (Info, *http.Cookie, error) {
 	sessionID := uuid.NewString()
 	sessionToken := uuid.NewString()
 	expiresAt := time.Now().UTC().Add(sessionTTL)
 
 	_, err := m.db.ExecContext(ctx, `
 		INSERT INTO session (id, session_token, expires_at)
-		VALUES (?, ?, ?)
+			VALUES (?, ?, ?)
 	`, sessionID, sessionToken, expiresAt)
 	if err != nil {
-		return "", nil, err
+		return Info{}, nil, err
 	}
 
-	return sessionToken, buildCookie(sessionToken, expiresAt), nil
+	return Info{ID: sessionID, Token: sessionToken}, buildCookie(sessionToken, expiresAt), nil
 }
 
-func (m *Manager) rotateSession(ctx context.Context, id string) (string, *http.Cookie, error) {
+func (m *Manager) rotateSession(ctx context.Context, id string) (Info, *http.Cookie, error) {
 	sessionToken := uuid.NewString()
 	expiresAt := time.Now().UTC().Add(sessionTTL)
 
 	res, err := m.db.ExecContext(ctx, `
 		UPDATE session
-		SET session_token = ?, expires_at = ?
-		WHERE id = ?
+			SET session_token = ?, expires_at = ?
+			WHERE id = ?
 	`, sessionToken, expiresAt, id)
 	if err != nil {
-		return "", nil, err
+		return Info{}, nil, err
 	}
 
 	if affected, _ := res.RowsAffected(); affected == 0 {
 		return m.createSession(ctx)
 	}
 
-	return sessionToken, buildCookie(sessionToken, expiresAt), nil
+	return Info{ID: id, Token: sessionToken}, buildCookie(sessionToken, expiresAt), nil
 }
 
-func (m *Manager) replaceSession(ctx context.Context, id string) (string, *http.Cookie, error) {
+func (m *Manager) replaceSession(ctx context.Context, id string) (Info, *http.Cookie, error) {
 	if _, err := m.db.ExecContext(ctx, `DELETE FROM session WHERE id = ?`, id); err != nil {
-		return "", nil, err
+		return Info{}, nil, err
 	}
 	return m.createSession(ctx)
 }
@@ -146,8 +152,8 @@ func buildCookie(token string, expiresAt time.Time) *http.Cookie {
 	}
 }
 
-// FromContext extracts the session token stored by the middleware.
-func FromContext(ctx context.Context) (string, bool) {
-	val, ok := ctx.Value(sessionContextKey).(string)
+// FromContext extracts the session Info stored by the middleware.
+func FromContext(ctx context.Context) (Info, bool) {
+	val, ok := ctx.Value(sessionContextKey).(Info)
 	return val, ok
 }
