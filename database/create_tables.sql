@@ -1,0 +1,39 @@
+USE sa_auth;
+
+CREATE TABLE IF NOT EXISTS session (
+  id CHAR(36) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_session_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS client (
+  id CHAR(36) NOT NULL,
+  client_id VARCHAR(128) NOT NULL,
+  client_secret VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  redirect_uri VARCHAR(2048) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_client_client_id (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS code_grant (
+  id CHAR(36) NOT NULL,
+  session_id CHAR(36) NOT NULL,
+  client_id CHAR(36) NOT NULL,
+  code VARCHAR(255) NOT NULL,
+  state VARCHAR(255),
+  scope VARCHAR(1024),
+  redirect_uri VARCHAR(2048) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_code_grant_code (code),
+  KEY idx_code_grant_session (session_id),
+  CONSTRAINT fk_code_grant_session FOREIGN KEY (session_id) REFERENCES session (id) ON DELETE CASCADE,
+  CONSTRAINT fk_code_grant_client FOREIGN KEY (client_id) REFERENCES client (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
