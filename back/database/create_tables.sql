@@ -11,6 +11,26 @@ CREATE TABLE IF NOT EXISTS session (
   KEY idx_session_expires_at (expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS user (
+  id CHAR(36) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_user_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS session_user (
+  session_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  authenticated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (session_id),
+  KEY idx_session_user_user_id (user_id),
+  CONSTRAINT fk_session_user_session FOREIGN KEY (session_id) REFERENCES session (id) ON DELETE CASCADE,
+  CONSTRAINT fk_session_user_user FOREIGN KEY (user_id) REFERENCES user (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS client (
   id CHAR(36) NOT NULL,
   client_id VARCHAR(128) NOT NULL,
