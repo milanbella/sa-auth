@@ -32,8 +32,9 @@ func main() {
 	}()
 
 	sessionManager := session.NewManager(sqlDB)
+	authStore := auth.NewStore(sqlDB)
 
-	router := newRouter(sessionManager)
+	router := newRouter(sessionManager, authStore)
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {
@@ -41,11 +42,12 @@ func main() {
 	}
 }
 
-func newRouter(sessionManager *session.Manager) http.Handler {
+func newRouter(sessionManager *session.Manager, authStore *auth.Store) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/hello", getHelloHandler)
 	mux.HandleFunc("/auth/hello", auth.HelloHandler)
+	mux.Handle("/auth/authorize", auth.NewAuthorizationHandler(authStore))
 
 	return sessionManager.Middleware(mux)
 }
