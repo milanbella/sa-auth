@@ -46,7 +46,6 @@ CREATE TABLE IF NOT EXISTS client (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS code_grant (
-  id CHAR(36) NOT NULL,
   session_id CHAR(36) NOT NULL,
   client_id CHAR(36) NOT NULL,
   code VARCHAR(255) NOT NULL,
@@ -55,7 +54,7 @@ CREATE TABLE IF NOT EXISTS code_grant (
   redirect_uri VARCHAR(2048) NOT NULL,
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
+  PRIMARY KEY (session_id),
   UNIQUE KEY idx_code_grant_code (code),
   KEY idx_code_grant_session (session_id),
   CONSTRAINT fk_code_grant_session FOREIGN KEY (session_id) REFERENCES session (id) ON DELETE CASCADE,

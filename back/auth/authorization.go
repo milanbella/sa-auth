@@ -142,12 +142,10 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 		validatedRedirect = registeredRedirect
 	}
 
-	codeID := uuid.NewString()
 	codeValue := uuid.NewString()
 	expiresAt := time.Now().UTC().Add(authorizationCodeTTL)
 
 	authCode := &AuthorizationCode{
-		ID:          codeID,
 		SessionID:   sessionInfo.ID,
 		ClientID:    client.ID,
 		Code:        codeValue,

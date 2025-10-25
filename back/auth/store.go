@@ -68,9 +68,15 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		state = sql.NullString{String: code.State, Valid: true}
 	}
 
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM code_grant
+		WHERE session_id = ?
+	`, code.SessionID); err != nil {
+		return logger.LogErr(fmt.Errorf("delete existing code grant for session %s: %w", code.SessionID, err))
+	}
+
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO code_grant (
-			id,
 			session_id,
 			client_id,
 			code,
@@ -78,9 +84,8 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 			scope,
 			redirect_uri,
 			expires_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?)
 	`,
-		code.ID,
 		code.SessionID,
 		code.ClientID,
 		code.Code,
@@ -90,7 +95,7 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		code.ExpiresAt,
 	)
 	if err != nil {
-		return logger.LogErr(fmt.Errorf("insert code grant %s: %w", code.ID, err))
+		return logger.LogErr(fmt.Errorf("insert code grant for session %s: %w", code.SessionID, err))
 	}
 	return nil
 }

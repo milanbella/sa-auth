@@ -15,7 +15,6 @@ type Client struct {
 
 // AuthorizationCode encapsulates a persisted authorization code grant.
 type AuthorizationCode struct {
-	ID          string
 	SessionID   string
 	ClientID    string
 	Code        string
