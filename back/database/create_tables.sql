@@ -45,6 +45,43 @@ CREATE TABLE IF NOT EXISTS client (
   UNIQUE KEY idx_client_client_id (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS access_token (
+  id CHAR(36) NOT NULL,
+  token VARCHAR(255) NOT NULL,
+  session_id CHAR(36) NOT NULL,
+  client_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  scope VARCHAR(1024),
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_access_token_token (token),
+  KEY idx_access_token_session (session_id),
+  KEY idx_access_token_user (user_id),
+  CONSTRAINT fk_access_token_session FOREIGN KEY (session_id) REFERENCES session (id) ON DELETE CASCADE,
+  CONSTRAINT fk_access_token_client FOREIGN KEY (client_id) REFERENCES client (id) ON DELETE CASCADE,
+  CONSTRAINT fk_access_token_user FOREIGN KEY (user_id) REFERENCES user (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS refresh_token (
+  id CHAR(36) NOT NULL,
+  token VARCHAR(255) NOT NULL,
+  session_id CHAR(36) NOT NULL,
+  client_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  scope VARCHAR(1024),
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY idx_refresh_token_token (token),
+  KEY idx_refresh_token_session (session_id),
+  KEY idx_refresh_token_user (user_id),
+  CONSTRAINT fk_refresh_token_session FOREIGN KEY (session_id) REFERENCES session (id) ON DELETE CASCADE,
+  CONSTRAINT fk_refresh_token_client FOREIGN KEY (client_id) REFERENCES client (id) ON DELETE CASCADE,
+  CONSTRAINT fk_refresh_token_user FOREIGN KEY (user_id) REFERENCES user (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS code_grant (
   session_id CHAR(36) NOT NULL,
   client_id CHAR(36) NOT NULL,

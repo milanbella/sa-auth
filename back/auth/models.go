@@ -15,11 +15,36 @@ type Client struct {
 
 // AuthorizationCode encapsulates a persisted authorization code grant.
 type AuthorizationCode struct {
-	SessionID   string
-	ClientID    string
-	Code        *string
-	State       string
-	Scope       []string
-	RedirectURI string
-	ExpiresAt   time.Time
+    SessionID   string
+    ClientID    string
+    Code        *string
+    State       string
+    Scope       []string
+    RedirectURI string
+    ExpiresAt   time.Time
+}
+
+// AccessToken represents an issued bearer token.
+type AccessToken struct {
+    ID        string
+    Token     string
+    SessionID string
+    ClientID  string
+    UserID    string
+    Scope     []string
+    ExpiresAt time.Time
+    CreatedAt time.Time
+}
+
+// RefreshToken represents a long-lived refresh credential.
+type RefreshToken struct {
+    ID        string
+    Token     string
+    SessionID string
+    ClientID  string
+    UserID    string
+    Scope     []string
+    ExpiresAt time.Time
+    RevokedAt *time.Time
+    CreatedAt time.Time
 }
