@@ -10,8 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/milanbella/sa-auth/logger"
 	"github.com/milanbella/sa-auth/session"
 	"github.com/milanbella/sa-auth/stringutils"
@@ -28,7 +26,6 @@ type authorizationRequest struct {
 	Client          *Client
 	Session         session.Info
 	Code            *AuthorizationCode
-	ResponseURI     *url.URL
 }
 
 type authorizationError struct {
@@ -152,13 +149,11 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 		validatedRedirect = registeredRedirect
 	}
 
-	codeValue := uuid.NewString()
 	expiresAt := time.Now().UTC().Add(authorizationCodeTTL)
 
 	authCode := &AuthorizationCode{
 		SessionID:   sessionInfo.ID,
 		ClientID:    client.ID,
-		Code:        codeValue,
 		State:       state,
 		Scope:       scopes,
 		RedirectURI: validatedRedirect.String(),
@@ -166,19 +161,11 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 	}
 
 	if err := store.SaveAuthorizationCode(r.Context(), authCode); err != nil {
-		authErr := newAuthorizationError("server_error", "unable to persist authorization code", err).(*authorizationError)
+		authErr := newAuthorizationError("server_error", "unable to persist authorization request", err).(*authorizationError)
 		authErr.RedirectURI = cloneURL(validatedRedirect)
 		authErr.State = state
 		return nil, logger.LogErr(authErr)
 	}
-
-	redirectForResponse := cloneURL(validatedRedirect)
-	query := redirectForResponse.Query()
-	query.Set("code", authCode.Code)
-	if state != "" {
-		query.Set("state", state)
-	}
-	redirectForResponse.RawQuery = query.Encode()
 
 	authReq := &authorizationRequest{
 		ResponseType:    responseType,
@@ -191,7 +178,6 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 		Client:          client,
 		Session:         sessionInfo,
 		Code:            authCode,
-		ResponseURI:     redirectForResponse,
 	}
 
 	return authReq, nil
@@ -253,6 +239,17 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		state = sql.NullString{String: code.State, Valid: true}
 	}
 
+	var codeValue interface{}
+	if code.Code != nil {
+		trimmed := strings.TrimSpace(*code.Code)
+		if trimmed != "" {
+			codeValue = trimmed
+			if *code.Code != trimmed {
+				*code.Code = trimmed
+			}
+		}
+	}
+
 	if _, err := s.db.ExecContext(ctx, `
 		DELETE FROM code_grant
 		WHERE session_id = ?
@@ -273,7 +270,7 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 	`,
 		code.SessionID,
 		code.ClientID,
-		code.Code,
+		codeValue,
 		state,
 		stringutils.NullIfBlank(scope),
 		code.RedirectURI,
@@ -295,7 +292,7 @@ func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID str
 
 	var (
 		clientID    string
-		codeValue   string
+		codeValue   sql.NullString
 		stateVal    sql.NullString
 		scopeVal    sql.NullString
 		redirectURI string
@@ -314,10 +311,16 @@ func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID str
 		scopes = strings.Fields(scopeVal.String)
 	}
 
+	var codePtr *string
+	if codeValue.Valid {
+		v := codeValue.String
+		codePtr = &v
+	}
+
 	authCode := &AuthorizationCode{
 		SessionID:   sessionID,
 		ClientID:    clientID,
-		Code:        codeValue,
+		Code:        codePtr,
 		State:       stateVal.String,
 		Scope:       scopes,
 		RedirectURI: redirectURI,

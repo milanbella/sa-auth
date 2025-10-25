@@ -85,7 +85,7 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rotatedCode := &AuthorizationCode{
 		SessionID:   authorizationCode.SessionID,
 		ClientID:    authorizationCode.ClientID,
-		Code:        newCode,
+		Code:        &newCode,
 		State:       authorizationCode.State,
 		Scope:       authorizationCode.Scope,
 		RedirectURI: authorizationCode.RedirectURI,
@@ -101,7 +101,9 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	successRedirect := cloneURL(redirectURI)
 	query := successRedirect.Query()
-	query.Set("code", rotatedCode.Code)
+	if rotatedCode.Code != nil {
+		query.Set("code", *rotatedCode.Code)
+	}
 	if authorizationCode.State != "" {
 		query.Set("state", authorizationCode.State)
 	}

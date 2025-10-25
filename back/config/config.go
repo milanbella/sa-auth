@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/milanbella/sa-auth/logger"
@@ -19,10 +20,13 @@ const (
 	defaultDBMaxIdleConns    = 5
 	defaultDBConnMaxLifetime = time.Minute * 15
 	defaultDBPingTimeout     = 5 * time.Second
+
+	defaultAuthLoginPath = "/login"
 )
 
 type Config struct {
 	Database DBConfig
+	Auth     AuthConfig
 }
 
 type DBConfig struct {
@@ -37,14 +41,24 @@ type DBConfig struct {
 	PingTimeout     time.Duration
 }
 
+type AuthConfig struct {
+	LoginPath string
+}
+
 func Load() (*Config, error) {
 	dbCfg, err := loadDBConfigFromEnv()
 	if err != nil {
 		return nil, logger.LogErr(err)
 	}
 
+	authCfg, err := loadAuthConfigFromEnv()
+	if err != nil {
+		return nil, logger.LogErr(err)
+	}
+
 	return &Config{
 		Database: *dbCfg,
+		Auth:     *authCfg,
 	}, nil
 }
 
@@ -105,6 +119,22 @@ func loadDBConfigFromEnv() (*DBConfig, error) {
 		ConnMaxLifetime: connMaxLifetime,
 		PingTimeout:     pingTimeout,
 	}, nil
+}
+
+func loadAuthConfigFromEnv() (*AuthConfig, error) {
+	loginPath := getEnvOrDefault("AUTH_LOGIN_PATH", defaultAuthLoginPath)
+	loginPath = strings.TrimSpace(loginPath)
+	if loginPath == "" {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must not be empty"))
+	}
+	if strings.HasPrefix(loginPath, "http://") || strings.HasPrefix(loginPath, "https://") {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must be relative"))
+	}
+	if !strings.HasPrefix(loginPath, "/") {
+		loginPath = "/" + loginPath
+	}
+
+	return &AuthConfig{LoginPath: loginPath}, nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {

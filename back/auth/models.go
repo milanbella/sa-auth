@@ -17,7 +17,7 @@ type Client struct {
 type AuthorizationCode struct {
 	SessionID   string
 	ClientID    string
-	Code        string
+	Code        *string
 	State       string
 	Scope       []string
 	RedirectURI string

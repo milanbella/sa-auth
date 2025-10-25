@@ -10,12 +10,13 @@ import (
 
 // AuthorizationHandler handles OAuth 2.0 authorization requests.
 type AuthorizationHandler struct {
-	store *Store
+	store     *Store
+	loginPath string
 }
 
 // NewAuthorizationHandler constructs an http.Handler that processes authorization requests.
-func NewAuthorizationHandler(store *Store) http.Handler {
-	return &AuthorizationHandler{store: store}
+func NewAuthorizationHandler(store *Store, loginPath string) http.Handler {
+	return &AuthorizationHandler{store: store, loginPath: loginPath}
 }
 
 func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -24,14 +25,19 @@ func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	if h.loginPath == "" {
+		logger.Error(errors.New("authorization handler misconfigured: empty login path"))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 
-	authRequest, err := processHTTPAuthorizationRequest(r, h.store)
+	_, err := processHTTPAuthorizationRequest(r, h.store)
 	if err != nil {
 		h.handleError(w, r, err)
 		return
 	}
 
-	http.Redirect(w, r, authRequest.ResponseURI.String(), http.StatusFound)
+	http.Redirect(w, r, h.loginPath, http.StatusFound)
 }
 
 func (h *AuthorizationHandler) handleError(w http.ResponseWriter, r *http.Request, err error) {

@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS client (
 CREATE TABLE IF NOT EXISTS code_grant (
   session_id CHAR(36) NOT NULL,
   client_id CHAR(36) NOT NULL,
-  code VARCHAR(255) NOT NULL,
+  code VARCHAR(255),
   state VARCHAR(255),
   scope VARCHAR(1024),
   redirect_uri VARCHAR(2048) NOT NULL,
