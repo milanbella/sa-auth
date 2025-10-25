@@ -48,6 +48,7 @@ func newRouter(sessionManager *session.Manager, authStore *auth.Store) http.Hand
 	mux.HandleFunc("/hello", getHelloHandler)
 	mux.HandleFunc("/auth/hello", auth.HelloHandler)
 	mux.Handle("/auth/authorize", auth.NewAuthorizationHandler(authStore))
+	mux.Handle("/auth/login", auth.NewLoginHandler(authStore))
 
 	return sessionManager.Middleware(mux)
 }

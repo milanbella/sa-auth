@@ -42,6 +42,8 @@ type authorizationError struct {
 var (
 	// ErrClientNotFound is returned when a client with the provided identifier does not exist.
 	ErrClientNotFound = errors.New("client not found")
+	// ErrAuthorizationCodeNotFound is returned when no authorization code exists for the session.
+	ErrAuthorizationCodeNotFound = errors.New("authorization code not found")
 )
 
 func (e *authorizationError) Error() string {
@@ -281,4 +283,46 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		return logger.LogErr(fmt.Errorf("insert code grant for session %s: %w", code.SessionID, err))
 	}
 	return nil
+}
+
+// GetAuthorizationCodeBySession returns the authorization code record associated with the session.
+func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID string) (*AuthorizationCode, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT client_id, code, state, scope, redirect_uri, expires_at
+		FROM code_grant
+		WHERE session_id = ?
+	`, sessionID)
+
+	var (
+		clientID    string
+		codeValue   string
+		stateVal    sql.NullString
+		scopeVal    sql.NullString
+		redirectURI string
+		expiresAt   time.Time
+	)
+
+	if err := row.Scan(&clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &expiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuthorizationCodeNotFound
+		}
+		return nil, logger.LogErr(fmt.Errorf("get code grant for session %s: %w", sessionID, err))
+	}
+
+	var scopes []string
+	if scopeVal.Valid && strings.TrimSpace(scopeVal.String) != "" {
+		scopes = strings.Fields(scopeVal.String)
+	}
+
+	authCode := &AuthorizationCode{
+		SessionID:   sessionID,
+		ClientID:    clientID,
+		Code:        codeValue,
+		State:       stateVal.String,
+		Scope:       scopes,
+		RedirectURI: redirectURI,
+		ExpiresAt:   expiresAt,
+	}
+
+	return authCode, nil
 }
