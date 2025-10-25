@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/milanbella/sa-auth/auth"
 	"github.com/milanbella/sa-auth/config"
@@ -34,7 +35,7 @@ func main() {
 	sessionManager := session.NewManager(sqlDB)
 	authStore := auth.NewStore(sqlDB)
 
-	router := newRouter(sessionManager, authStore, cfg.Auth.LoginPath)
+	router := newRouter(sessionManager, authStore, cfg.Auth.LoginPath, cfg.Auth.AccessTokenTTL, cfg.Auth.RefreshTokenTTL)
 
 	log.Println("listening on :8080")
 	if err := http.ListenAndServe(":8080", router); err != nil {
@@ -42,13 +43,14 @@ func main() {
 	}
 }
 
-func newRouter(sessionManager *session.Manager, authStore *auth.Store, loginPath string) http.Handler {
+func newRouter(sessionManager *session.Manager, authStore *auth.Store, loginPath string, accessTTL, refreshTTL time.Duration) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/hello", getHelloHandler)
 	mux.HandleFunc("/auth/hello", auth.HelloHandler)
 	mux.Handle("/auth/authorize", auth.NewAuthorizationHandler(authStore, loginPath))
 	mux.Handle("/auth/login", auth.NewLoginHandler(authStore))
+	mux.Handle("/auth/token", auth.NewTokenHandler(authStore, accessTTL, refreshTTL))
 
 	return sessionManager.Middleware(mux)
 }

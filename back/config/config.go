@@ -11,19 +11,19 @@ import (
 )
 
 const (
-    defaultDBHost            = "127.0.0.1"
-    defaultDBPort            = 3306
-    defaultDBUser            = "sa_auth"
-    defaultDBPassword        = ""
-    defaultDBName            = "sa_auth"
-    defaultDBMaxOpenConns    = 10
-    defaultDBMaxIdleConns    = 5
-    defaultDBConnMaxLifetime = time.Minute * 15
-    defaultDBPingTimeout     = 5 * time.Second
+	defaultDBHost            = "127.0.0.1"
+	defaultDBPort            = 3306
+	defaultDBUser            = "sa_auth"
+	defaultDBPassword        = ""
+	defaultDBName            = "sa_auth"
+	defaultDBMaxOpenConns    = 10
+	defaultDBMaxIdleConns    = 5
+	defaultDBConnMaxLifetime = time.Minute * 15
+	defaultDBPingTimeout     = 5 * time.Second
 
-    defaultAuthLoginPath     = "/login"
-    defaultAccessTokenTTL    = 5 * time.Minute
-    defaultRefreshTokenTTL   = 24 * time.Hour
+	defaultAuthLoginPath   = "/login"
+	defaultAccessTokenTTL  = 5 * time.Minute
+	defaultRefreshTokenTTL = 24 * time.Hour
 )
 
 type Config struct {
@@ -44,9 +44,9 @@ type DBConfig struct {
 }
 
 type AuthConfig struct {
-    LoginPath        string
-    AccessTokenTTL   time.Duration
-    RefreshTokenTTL  time.Duration
+	LoginPath       string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
 }
 
 func Load() (*Config, error) {
@@ -126,39 +126,39 @@ func loadDBConfigFromEnv() (*DBConfig, error) {
 }
 
 func loadAuthConfigFromEnv() (*AuthConfig, error) {
-    loginPath := getEnvOrDefault("AUTH_LOGIN_PATH", defaultAuthLoginPath)
-    loginPath = strings.TrimSpace(loginPath)
-    if loginPath == "" {
-        return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must not be empty"))
-    }
-    if strings.HasPrefix(loginPath, "http://") || strings.HasPrefix(loginPath, "https://") {
-        return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must be relative"))
-    }
-    if !strings.HasPrefix(loginPath, "/") {
-        loginPath = "/" + loginPath
-    }
+	loginPath := getEnvOrDefault("AUTH_LOGIN_PATH", defaultAuthLoginPath)
+	loginPath = strings.TrimSpace(loginPath)
+	if loginPath == "" {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must not be empty"))
+	}
+	if strings.HasPrefix(loginPath, "http://") || strings.HasPrefix(loginPath, "https://") {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_LOGIN_PATH must be relative"))
+	}
+	if !strings.HasPrefix(loginPath, "/") {
+		loginPath = "/" + loginPath
+	}
 
-    accessTTL, err := getEnvAsDuration("AUTH_ACCESS_TOKEN_TTL", defaultAccessTokenTTL)
-    if err != nil {
-        return nil, logger.LogErr(fmt.Errorf("invalid AUTH_ACCESS_TOKEN_TTL: %w", err))
-    }
-    if accessTTL <= 0 {
-        return nil, logger.LogErr(fmt.Errorf("AUTH_ACCESS_TOKEN_TTL must be greater than zero"))
-    }
+	accessTTL, err := getEnvAsDuration("AUTH_ACCESS_TOKEN_TTL", defaultAccessTokenTTL)
+	if err != nil {
+		return nil, logger.LogErr(fmt.Errorf("invalid AUTH_ACCESS_TOKEN_TTL: %w", err))
+	}
+	if accessTTL <= 0 {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_ACCESS_TOKEN_TTL must be greater than zero"))
+	}
 
-    refreshTTL, err := getEnvAsDuration("AUTH_REFRESH_TOKEN_TTL", defaultRefreshTokenTTL)
-    if err != nil {
-        return nil, logger.LogErr(fmt.Errorf("invalid AUTH_REFRESH_TOKEN_TTL: %w", err))
-    }
-    if refreshTTL <= 0 {
-        return nil, logger.LogErr(fmt.Errorf("AUTH_REFRESH_TOKEN_TTL must be greater than zero"))
-    }
+	refreshTTL, err := getEnvAsDuration("AUTH_REFRESH_TOKEN_TTL", defaultRefreshTokenTTL)
+	if err != nil {
+		return nil, logger.LogErr(fmt.Errorf("invalid AUTH_REFRESH_TOKEN_TTL: %w", err))
+	}
+	if refreshTTL <= 0 {
+		return nil, logger.LogErr(fmt.Errorf("AUTH_REFRESH_TOKEN_TTL must be greater than zero"))
+	}
 
-    return &AuthConfig{
-        LoginPath:       loginPath,
-        AccessTokenTTL:  accessTTL,
-        RefreshTokenTTL: refreshTTL,
-    }, nil
+	return &AuthConfig{
+		LoginPath:       loginPath,
+		AccessTokenTTL:  accessTTL,
+		RefreshTokenTTL: refreshTTL,
+	}, nil
 }
 
 func getEnvOrDefault(key string, defaultValue string) string {

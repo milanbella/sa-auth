@@ -329,3 +329,70 @@ func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID str
 
 	return authCode, nil
 }
+
+// GetAuthorizationCodeByCode fetches the authorization code record matching the provided code.
+func (s *Store) GetAuthorizationCodeByCode(ctx context.Context, code string) (*AuthorizationCode, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, logger.LogErr(errors.New("authorization code is required"))
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		SELECT session_id, client_id, code, state, scope, redirect_uri, expires_at
+		FROM code_grant
+		WHERE code = ?
+	`, code)
+
+	var (
+		sessionID   string
+		clientID    string
+		codeValue   sql.NullString
+		stateVal    sql.NullString
+		scopeVal    sql.NullString
+		redirectURI string
+		expiresAt   time.Time
+	)
+
+	if err := row.Scan(&sessionID, &clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &expiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrAuthorizationCodeNotFound
+		}
+		return nil, logger.LogErr(fmt.Errorf("get code grant by code %s: %w", code, err))
+	}
+
+	var scopes []string
+	if scopeVal.Valid && strings.TrimSpace(scopeVal.String) != "" {
+		scopes = strings.Fields(scopeVal.String)
+	}
+
+	authCode := &AuthorizationCode{
+		SessionID:   sessionID,
+		ClientID:    clientID,
+		State:       stateVal.String,
+		Scope:       scopes,
+		RedirectURI: redirectURI,
+		ExpiresAt:   expiresAt,
+	}
+	if codeValue.Valid {
+		value := codeValue.String
+		authCode.Code = &value
+	}
+
+	return authCode, nil
+}
+
+// DeleteAuthorizationCode removes the authorization code entry associated with the session.
+func (s *Store) DeleteAuthorizationCode(ctx context.Context, sessionID string) error {
+	if strings.TrimSpace(sessionID) == "" {
+		return logger.LogErr(errors.New("session id is required to delete authorization code"))
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM code_grant
+		WHERE session_id = ?
+	`, sessionID); err != nil {
+		return logger.LogErr(fmt.Errorf("delete code grant for session %s: %w", sessionID, err))
+	}
+
+	return nil
+}
