@@ -4,10 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/milanbella/sa-auth/logger"
 )
 
 type ctxKey string
@@ -42,6 +45,7 @@ func (m *Manager) Middleware(next http.Handler) http.Handler {
 
 		info, cookieToSet, err := m.ensureSession(ctx, r.Cookie)
 		if err != nil {
+			logger.Error(fmt.Errorf("ensure session: %w", err))
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -60,7 +64,7 @@ func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) 
 		if errors.Is(err, http.ErrNoCookie) {
 			return m.createSession(ctx)
 		}
-		return Info{}, nil, err
+		return Info{}, nil, logger.LogErr(fmt.Errorf("read session cookie: %w", err))
 	}
 
 	if cookie.Value == "" {
@@ -83,7 +87,7 @@ func (m *Manager) ensureSession(ctx context.Context, cookieFn func(name string) 
 		if errors.Is(err, sql.ErrNoRows) {
 			return m.createSession(ctx)
 		}
-		return Info{}, nil, err
+		return Info{}, nil, logger.LogErr(fmt.Errorf("scan session row: %w", err))
 	}
 
 	now := time.Now().UTC()
@@ -104,11 +108,11 @@ func (m *Manager) createSession(ctx context.Context) (Info, *http.Cookie, error)
 	expiresAt := time.Now().UTC().Add(sessionTTL)
 
 	_, err := m.db.ExecContext(ctx, `
-		INSERT INTO session (id, session_token, expires_at)
+			INSERT INTO session (id, session_token, expires_at)
 			VALUES (?, ?, ?)
 	`, sessionID, sessionToken, expiresAt)
 	if err != nil {
-		return Info{}, nil, err
+		return Info{}, nil, logger.LogErr(fmt.Errorf("insert session: %w", err))
 	}
 
 	return Info{ID: sessionID, Token: sessionToken}, buildCookie(sessionToken, expiresAt), nil
@@ -119,12 +123,12 @@ func (m *Manager) rotateSession(ctx context.Context, id string) (Info, *http.Coo
 	expiresAt := time.Now().UTC().Add(sessionTTL)
 
 	res, err := m.db.ExecContext(ctx, `
-		UPDATE session
+			UPDATE session
 			SET session_token = ?, expires_at = ?
 			WHERE id = ?
 	`, sessionToken, expiresAt, id)
 	if err != nil {
-		return Info{}, nil, err
+		return Info{}, nil, logger.LogErr(fmt.Errorf("rotate session %s: %w", id, err))
 	}
 
 	if affected, _ := res.RowsAffected(); affected == 0 {
@@ -136,7 +140,7 @@ func (m *Manager) rotateSession(ctx context.Context, id string) (Info, *http.Coo
 
 func (m *Manager) replaceSession(ctx context.Context, id string) (Info, *http.Cookie, error) {
 	if _, err := m.db.ExecContext(ctx, `DELETE FROM session WHERE id = ?`, id); err != nil {
-		return Info{}, nil, err
+		return Info{}, nil, logger.LogErr(fmt.Errorf("delete session %s: %w", id, err))
 	}
 	return m.createSession(ctx)
 }
