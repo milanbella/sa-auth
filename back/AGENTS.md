@@ -3,6 +3,7 @@
 ## Error handling
 
 - Always log errors using our logger package `logger`.
+- It is very important that if function returns error that ypu always log the error. Thus when we look to the log we shall also have recorded the stack calls leading to the errored function.
 - Never swallow errors; return early with context.
 
 

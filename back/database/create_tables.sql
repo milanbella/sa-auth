@@ -91,7 +91,6 @@ CREATE TABLE IF NOT EXISTS code_grant (
   state VARCHAR(255),
   scope VARCHAR(1024),
   redirect_uri VARCHAR(2048) NOT NULL,
-  next_security_tool ENUM('LOGIN_FORM') DEFAULT 'LOGIN_FORM',
   expires_at DATETIME NOT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (session_id),

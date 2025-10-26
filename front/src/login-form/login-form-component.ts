@@ -25,6 +25,7 @@ class LoginForm extends HTMLElement {
     private shadow = this.attachShadow({mode: "open"});
     private form: HTMLFormElement | null = null;
     private errorElement: HTMLDivElement | null = null;
+    private readonly authorizeNextEndpoint = '/auth/authorize/next';
     public onSubmit?: (username: string, password: string) => void | Promise<void>;
 
     private handleSubmit = async (event: SubmitEvent) => {
@@ -73,7 +74,7 @@ class LoginForm extends HTMLElement {
                 return;
             }
 
-            const nextUrl = payload?.redirect_url || '/auth/authorize/next';
+            const nextUrl = payload?.redirect_url || this.authorizeNextEndpoint;
             await this.advanceAuthorizationFlow(nextUrl);
         } catch (error) {
             console.error('login request failed', error);
@@ -104,7 +105,13 @@ class LoginForm extends HTMLElement {
 
             if (payload.completed) {
                 if (payload.redirect_url) {
-                    window.location.href = payload.redirect_url;
+                    this.dispatchEvent(
+                        new CustomEvent('authorization-complete', {
+                            detail: { redirectUrl: payload.redirect_url },
+                            bubbles: true,
+                            composed: true,
+                        }),
+                    );
                     return;
                 }
 

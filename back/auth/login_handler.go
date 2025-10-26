@@ -6,9 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/milanbella/sa-auth/logger"
 	"github.com/milanbella/sa-auth/session"
@@ -80,8 +77,7 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authorizationCode, err := h.store.GetAuthorizationCodeBySession(r.Context(), sessionInfo.ID)
-	if err != nil {
+	if _, err := h.store.GetAuthorizationCodeBySession(r.Context(), sessionInfo.ID); err != nil {
 		if errors.Is(err, ErrAuthorizationCodeNotFound) {
 			writeJSONResponse(w, http.StatusBadRequest, ResponseLogin{
 				Message: "authorization request not found",
@@ -109,25 +105,8 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newCode := uuid.NewString()
-	expiresAt := time.Now().UTC().Add(authorizationCodeTTL)
-	rotatedCode := &AuthorizationCode{
-		SessionID:        authorizationCode.SessionID,
-		ClientID:         authorizationCode.ClientID,
-		Code:             &newCode,
-		State:            authorizationCode.State,
-		Scope:            authorizationCode.Scope,
-		RedirectURI:      authorizationCode.RedirectURI,
-		ExpiresAt:        expiresAt,
-		NextSecurityTool: nil,
-		GrantType:        authorizationCode.GrantType,
-	}
-	if rotatedCode.GrantType == "" {
-		rotatedCode.GrantType = GrantTypeAuthorizationCode
-	}
-
-	if err := h.store.SaveAuthorizationCode(r.Context(), rotatedCode); err != nil {
-		logger.Error(fmt.Errorf("rotate authorization code for session %s: %w", sessionInfo.ID, err))
+	if err := h.store.SetSessionNextSecurityTool(r.Context(), sessionInfo.ID, nil); err != nil {
+		logger.Error(fmt.Errorf("clear next security tool for session %s: %w", sessionInfo.ID, err))
 		writeJSONResponse(w, http.StatusInternalServerError, ResponseLogin{
 			Message: http.StatusText(http.StatusInternalServerError),
 		})
