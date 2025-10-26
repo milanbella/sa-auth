@@ -150,14 +150,16 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 	}
 
 	expiresAt := time.Now().UTC().Add(authorizationCodeTTL)
+	nextTool := SecurityToolLoginForm
 
 	authCode := &AuthorizationCode{
-		SessionID:   sessionInfo.ID,
-		ClientID:    client.ID,
-		State:       state,
-		Scope:       scopes,
-		RedirectURI: validatedRedirect.String(),
-		ExpiresAt:   expiresAt,
+		SessionID:        sessionInfo.ID,
+		ClientID:         client.ID,
+		State:            state,
+		Scope:            scopes,
+		RedirectURI:      validatedRedirect.String(),
+		ExpiresAt:        expiresAt,
+		NextSecurityTool: &nextTool,
 	}
 
 	if err := store.SaveAuthorizationCode(r.Context(), authCode); err != nil {
@@ -250,6 +252,11 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		}
 	}
 
+	var nextTool interface{}
+	if code.NextSecurityTool != nil {
+		nextTool = string(*code.NextSecurityTool)
+	}
+
 	if _, err := s.db.ExecContext(ctx, `
 		DELETE FROM code_grant
 		WHERE session_id = ?
@@ -265,8 +272,9 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 			state,
 			scope,
 			redirect_uri,
+			next_security_tool,
 			expires_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		code.SessionID,
 		code.ClientID,
@@ -274,10 +282,19 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		state,
 		stringutils.NullIfBlank(scope),
 		code.RedirectURI,
+		nextTool,
 		code.ExpiresAt,
 	)
 	if err != nil {
 		return logger.LogErr(fmt.Errorf("insert code grant for session %s: %w", code.SessionID, err))
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE session
+		SET next_security_tool = ?
+		WHERE id = ?
+	`, nextTool, code.SessionID); err != nil {
+		return logger.LogErr(fmt.Errorf("update next security tool for session %s: %w", code.SessionID, err))
 	}
 	return nil
 }
@@ -285,7 +302,7 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 // GetAuthorizationCodeBySession returns the authorization code record associated with the session.
 func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID string) (*AuthorizationCode, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT client_id, code, state, scope, redirect_uri, expires_at
+		SELECT client_id, code, state, scope, redirect_uri, next_security_tool, expires_at
 		FROM code_grant
 		WHERE session_id = ?
 	`, sessionID)
@@ -296,10 +313,11 @@ func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID str
 		stateVal    sql.NullString
 		scopeVal    sql.NullString
 		redirectURI string
+		nextToolVal sql.NullString
 		expiresAt   time.Time
 	)
 
-	if err := row.Scan(&clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &expiresAt); err != nil {
+	if err := row.Scan(&clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &nextToolVal, &expiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrAuthorizationCodeNotFound
 		}
@@ -327,6 +345,11 @@ func (s *Store) GetAuthorizationCodeBySession(ctx context.Context, sessionID str
 		ExpiresAt:   expiresAt,
 	}
 
+	if nextToolVal.Valid {
+		tool := SecurityTool(nextToolVal.String)
+		authCode.NextSecurityTool = &tool
+	}
+
 	return authCode, nil
 }
 
@@ -338,7 +361,7 @@ func (s *Store) GetAuthorizationCodeByCode(ctx context.Context, code string) (*A
 	}
 
 	row := s.db.QueryRowContext(ctx, `
-		SELECT session_id, client_id, code, state, scope, redirect_uri, expires_at
+		SELECT session_id, client_id, code, state, scope, redirect_uri, next_security_tool, expires_at
 		FROM code_grant
 		WHERE code = ?
 	`, code)
@@ -350,10 +373,11 @@ func (s *Store) GetAuthorizationCodeByCode(ctx context.Context, code string) (*A
 		stateVal    sql.NullString
 		scopeVal    sql.NullString
 		redirectURI string
+		nextToolVal sql.NullString
 		expiresAt   time.Time
 	)
 
-	if err := row.Scan(&sessionID, &clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &expiresAt); err != nil {
+	if err := row.Scan(&sessionID, &clientID, &codeValue, &stateVal, &scopeVal, &redirectURI, &nextToolVal, &expiresAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrAuthorizationCodeNotFound
 		}
@@ -376,6 +400,10 @@ func (s *Store) GetAuthorizationCodeByCode(ctx context.Context, code string) (*A
 	if codeValue.Valid {
 		value := codeValue.String
 		authCode.Code = &value
+	}
+	if nextToolVal.Valid {
+		tool := SecurityTool(nextToolVal.String)
+		authCode.NextSecurityTool = &tool
 	}
 
 	return authCode, nil

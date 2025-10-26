@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
@@ -31,13 +32,33 @@ func (h *AuthorizationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := processHTTPAuthorizationRequest(r, h.store)
+	authReq, err := processHTTPAuthorizationRequest(r, h.store)
 	if err != nil {
 		h.handleError(w, r, err)
 		return
 	}
 
-	http.Redirect(w, r, h.loginPath, http.StatusFound)
+	codeGrant, err := h.store.GetAuthorizationCodeBySession(r.Context(), authReq.Session.ID)
+	if err != nil {
+		if errors.Is(err, ErrAuthorizationCodeNotFound) {
+			logger.Error(fmt.Errorf("authorization code missing for session %s", authReq.Session.ID))
+		} else {
+			logger.Error(fmt.Errorf("load authorization request for session %s: %w", authReq.Session.ID, err))
+		}
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	switch {
+	case codeGrant.NextSecurityTool == nil:
+		logger.Error(fmt.Errorf("next security tool not set for session %s", authReq.Session.ID))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	case *codeGrant.NextSecurityTool == SecurityToolLoginForm:
+		http.Redirect(w, r, h.loginPath, http.StatusFound)
+	default:
+		logger.Error(fmt.Errorf("unsupported next security tool %q for session %s", *codeGrant.NextSecurityTool, authReq.Session.ID))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	}
 }
 
 func (h *AuthorizationHandler) handleError(w http.ResponseWriter, r *http.Request, err error) {
