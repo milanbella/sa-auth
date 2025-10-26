@@ -1,10 +1,12 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -35,9 +37,31 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
+	var (
+		username string
+		password string
+	)
+
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "application/json") {
+		var payload struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			http.Error(w, "invalid json payload", http.StatusBadRequest)
+			return
+		}
+		username = payload.Username
+		password = payload.Password
+	} else {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
+		}
+		username = r.Form.Get("username")
+		password = r.Form.Get("password")
 	}
 
 	sessionInfo, ok := session.FromContext(r.Context())
@@ -64,9 +88,6 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
-
-	username := r.Form.Get("username")
-	password := r.Form.Get("password")
 
 	if _, err := Login(r.Context(), h.store, sessionInfo.ID, username, password); err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {

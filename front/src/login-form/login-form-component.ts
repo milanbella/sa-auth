@@ -11,9 +11,9 @@ tpl.innerHTML = `
 class LoginForm extends HTMLElement {
     private shadow = this.attachShadow({mode: "open"});
     private form: HTMLFormElement | null = null;
-    public onSubmit?: (username: string, password: string) => void;
+    public onSubmit?: (username: string, password: string) => void | Promise<void>;
 
-    private handleSubmit = (event: Event) => {
+    private handleSubmit = async (event: SubmitEvent) => {
         event.preventDefault();
 
         const form = event.target as HTMLFormElement | null;
@@ -22,11 +22,45 @@ class LoginForm extends HTMLElement {
         }
 
         const formData = new FormData(form);
-        const username = (formData.get('username')) as string;
-        const password = (formData.get('password')) as string;
+        const username = formData.get('username');
+        const password = formData.get('password');
+
+        if (typeof username !== 'string' || typeof password !== 'string') {
+            console.error('login form missing credentials');
+            return;
+        }
 
         if (typeof this.onSubmit === 'function') {
-            this.onSubmit(username, password);
+            await this.onSubmit(username, password);
+            return;
+        }
+
+        await this.submitLogin(username, password);
+    };
+
+    private submitLogin = async (username: string, password: string) => {
+        try {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password }),
+                credentials: 'include',
+                redirect: 'follow',
+            });
+
+            if (response.redirected) {
+                window.location.href = response.url;
+                return;
+            }
+
+            if (!response.ok) {
+                const message = await response.text();
+                console.error('login failed', response.status, message);
+            }
+        } catch (error) {
+            console.error('login request failed', error);
         }
     };
 

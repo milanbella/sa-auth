@@ -8,5 +8,9 @@ You are not required to put all methods of `Store` object inside `store.go` file
 
 ## Model
 
-Use `model.go` fro any types regarding the auth domain model.
+Use `model.go` for any types regarding the auth domain model.
+
+yse `model_http.go` for defining request, response payload of http endpoints. Use prefixes `Request`, `Response` and path name when composing paylod type name. 
+Example:
+- if http endpoint is `/login` name request payload type  'RequestLogin`, name response payload type `ResponseLogin`. 
 
