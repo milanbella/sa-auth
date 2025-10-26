@@ -4,8 +4,12 @@ import "time"
 
 type SecurityTool string
 
+type GrantType string
+
 const (
 	SecurityToolLoginForm SecurityTool = "LOGIN_FORM"
+
+	GrantTypeAuthorizationCode GrantType = "AUTHORIZATION_CODE"
 )
 
 // Client represents an OAuth client application registered with the authorization server.
@@ -29,6 +33,7 @@ type AuthorizationCode struct {
 	RedirectURI      string
 	ExpiresAt        time.Time
 	NextSecurityTool *SecurityTool
+	GrantType        GrantType
 }
 
 // AccessToken represents an issued bearer token.

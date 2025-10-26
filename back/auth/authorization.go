@@ -160,6 +160,7 @@ func processHTTPAuthorizationRequest(r *http.Request, store *Store) (*authorizat
 		RedirectURI:      validatedRedirect.String(),
 		ExpiresAt:        expiresAt,
 		NextSecurityTool: &nextTool,
+		GrantType:        GrantTypeAuthorizationCode,
 	}
 
 	if err := store.SaveAuthorizationCode(r.Context(), authCode); err != nil {
@@ -257,6 +258,11 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 		nextTool = string(*code.NextSecurityTool)
 	}
 
+	var grantType interface{}
+	if code.GrantType != "" {
+		grantType = string(code.GrantType)
+	}
+
 	if _, err := s.db.ExecContext(ctx, `
 		DELETE FROM code_grant
 		WHERE session_id = ?
@@ -291,10 +297,10 @@ func (s *Store) SaveAuthorizationCode(ctx context.Context, code *AuthorizationCo
 
 	if _, err := s.db.ExecContext(ctx, `
 		UPDATE session
-		SET next_security_tool = ?
+		SET next_security_tool = ?, grant_type = COALESCE(?, grant_type)
 		WHERE id = ?
-	`, nextTool, code.SessionID); err != nil {
-		return logger.LogErr(fmt.Errorf("update next security tool for session %s: %w", code.SessionID, err))
+	`, nextTool, grantType, code.SessionID); err != nil {
+		return logger.LogErr(fmt.Errorf("update session authorization state for session %s: %w", code.SessionID, err))
 	}
 	return nil
 }
