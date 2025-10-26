@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -44,91 +43,107 @@ func (h *LoginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	contentType := r.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "application/json") {
-		var payload struct {
-			Username string `json:"username"`
-			Password string `json:"password"`
-		}
-
+		var payload RequestLogin
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "invalid json payload", http.StatusBadRequest)
+			writeJSONResponse(w, http.StatusBadRequest, ResponseLogin{
+				Message: "invalid json payload",
+			})
 			return
 		}
 		username = payload.Username
 		password = payload.Password
 	} else {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "invalid form", http.StatusBadRequest)
+			writeJSONResponse(w, http.StatusBadRequest, ResponseLogin{
+				Message: "invalid form data",
+			})
 			return
 		}
 		username = r.Form.Get("username")
 		password = r.Form.Get("password")
 	}
 
+	username = strings.TrimSpace(username)
+	if username == "" || password == "" {
+		writeJSONResponse(w, http.StatusBadRequest, ResponseLogin{
+			Message: "username and password are required",
+		})
+		return
+	}
+
 	sessionInfo, ok := session.FromContext(r.Context())
 	if !ok || sessionInfo.ID == "" {
 		logger.Error(errors.New("session information missing in context"))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		writeJSONResponse(w, http.StatusInternalServerError, ResponseLogin{
+			Message: http.StatusText(http.StatusInternalServerError),
+		})
 		return
 	}
 
 	authorizationCode, err := h.store.GetAuthorizationCodeBySession(r.Context(), sessionInfo.ID)
 	if err != nil {
 		if errors.Is(err, ErrAuthorizationCodeNotFound) {
-			http.Error(w, "authorization request not found", http.StatusBadRequest)
+			writeJSONResponse(w, http.StatusBadRequest, ResponseLogin{
+				Message: "authorization request not found",
+			})
 			return
 		}
 		logger.Error(fmt.Errorf("load authorization code for session %s: %w", sessionInfo.ID, err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	redirectURI, err := url.Parse(authorizationCode.RedirectURI)
-	if err != nil {
-		logger.Error(fmt.Errorf("stored redirect URI invalid for session %s: %w", sessionInfo.ID, err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		writeJSONResponse(w, http.StatusInternalServerError, ResponseLogin{
+			Message: http.StatusText(http.StatusInternalServerError),
+		})
 		return
 	}
 
 	if _, err := Login(r.Context(), h.store, sessionInfo.ID, username, password); err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
-			errorRedirect := appendErrorQuery(redirectURI, "access_denied", "invalid credentials", authorizationCode.State)
-			http.Redirect(w, r, errorRedirect.String(), http.StatusFound)
+			writeJSONResponse(w, http.StatusUnauthorized, ResponseLogin{
+				Message: "invalid credentials",
+			})
 			return
 		}
 		logger.Error(fmt.Errorf("login failed for session %s: %w", sessionInfo.ID, err))
-		errorRedirect := appendErrorQuery(redirectURI, "server_error", "internal error", authorizationCode.State)
-		http.Redirect(w, r, errorRedirect.String(), http.StatusFound)
+		writeJSONResponse(w, http.StatusInternalServerError, ResponseLogin{
+			Message: http.StatusText(http.StatusInternalServerError),
+		})
 		return
 	}
 
 	newCode := uuid.NewString()
 	expiresAt := time.Now().UTC().Add(authorizationCodeTTL)
 	rotatedCode := &AuthorizationCode{
-		SessionID:   authorizationCode.SessionID,
-		ClientID:    authorizationCode.ClientID,
-		Code:        &newCode,
-		State:       authorizationCode.State,
-		Scope:       authorizationCode.Scope,
-		RedirectURI: authorizationCode.RedirectURI,
-		ExpiresAt:   expiresAt,
+		SessionID:        authorizationCode.SessionID,
+		ClientID:         authorizationCode.ClientID,
+		Code:             &newCode,
+		State:            authorizationCode.State,
+		Scope:            authorizationCode.Scope,
+		RedirectURI:      authorizationCode.RedirectURI,
+		ExpiresAt:        expiresAt,
+		NextSecurityTool: nil,
+		GrantType:        authorizationCode.GrantType,
+	}
+	if rotatedCode.GrantType == "" {
+		rotatedCode.GrantType = GrantTypeAuthorizationCode
 	}
 
 	if err := h.store.SaveAuthorizationCode(r.Context(), rotatedCode); err != nil {
 		logger.Error(fmt.Errorf("rotate authorization code for session %s: %w", sessionInfo.ID, err))
-		errorRedirect := appendErrorQuery(redirectURI, "server_error", "internal error", authorizationCode.State)
-		http.Redirect(w, r, errorRedirect.String(), http.StatusFound)
+		writeJSONResponse(w, http.StatusInternalServerError, ResponseLogin{
+			Message: http.StatusText(http.StatusInternalServerError),
+		})
 		return
 	}
 
-	successRedirect := cloneURL(redirectURI)
-	query := successRedirect.Query()
-	if rotatedCode.Code != nil {
-		query.Set("code", *rotatedCode.Code)
-	}
-	if authorizationCode.State != "" {
-		query.Set("state", authorizationCode.State)
-	}
-	successRedirect.RawQuery = query.Encode()
+	w.Header().Set("Location", "/auth/authorize/next")
+	writeJSONResponse(w, http.StatusOK, ResponseLogin{
+		RedirectURL: "/auth/authorize/next",
+	})
+}
 
-	http.Redirect(w, r, successRedirect.String(), http.StatusFound)
+func writeJSONResponse(w http.ResponseWriter, status int, payload ResponseLogin) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		logger.Error(fmt.Errorf("write login response: %w", err))
+	}
 }

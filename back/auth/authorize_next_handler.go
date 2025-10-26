@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/milanbella/sa-auth/logger"
 )
@@ -43,7 +44,44 @@ func (h *AuthorizationNextHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 	}
 
 	if ctx.NextSecurityTool == nil {
+		codeGrant, err := h.store.GetAuthorizationCodeBySession(r.Context(), ctx.Session.ID)
+		if err != nil {
+			logger.Error(fmt.Errorf("load authorization code for session %s: %w", ctx.Session.ID, err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		if codeGrant.Code == nil || *codeGrant.Code == "" {
+			logger.Error(fmt.Errorf("authorization code missing for session %s", ctx.Session.ID))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		redirectURI, err := url.Parse(codeGrant.RedirectURI)
+		if err != nil {
+			logger.Error(fmt.Errorf("stored redirect URI invalid for session %s: %w", ctx.Session.ID, err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		successRedirect := cloneURL(redirectURI)
+		if successRedirect == nil {
+			logger.Error(fmt.Errorf("clone redirect URI failed for session %s", ctx.Session.ID))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		query := successRedirect.Query()
+		if codeGrant.Code != nil {
+			query.Set("code", *codeGrant.Code)
+		}
+		if codeGrant.State != "" {
+			query.Set("state", codeGrant.State)
+		}
+		successRedirect.RawQuery = query.Encode()
+
 		response.Completed = true
+		response.RedirectURL = successRedirect.String()
 	} else {
 		tool := *ctx.NextSecurityTool
 		response.NextSecurityTool = &tool

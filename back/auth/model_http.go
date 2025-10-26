@@ -8,3 +8,13 @@ type ResponseAuthorizationNext struct {
 	RedirectURL      string        `json:"redirect_url,omitempty"`
 	Completed        bool          `json:"completed"`
 }
+
+type RequestLogin struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type ResponseLogin struct {
+	RedirectURL string `json:"redirect_url,omitempty"`
+	Message     string `json:"message,omitempty"`
+}

@@ -21,6 +21,12 @@ form {
     gap: 0.75rem;
 }
 
+.error {
+    color: #b00020;
+    font-size: 0.9rem;
+    min-height: 1rem;
+}
+
 input,
 button {
 
